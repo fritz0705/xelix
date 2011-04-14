@@ -315,6 +315,8 @@ commonStub:
 	push ebp
 	push esi
 	push edi
+
+	pushf
 	
 	; push ds
 	mov eax, 0
@@ -346,6 +348,8 @@ commonStub:
 	mov gs, bx
 
 	; Reload all the registers.
+	popf
+
 	pop edi
 	pop esi
 	pop ebp
