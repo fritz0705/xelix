@@ -43,6 +43,7 @@
 #include <init/debugconsole.h>
 #include <console/interface.h>
 #include <hw/pci.h>
+#include <hw/ne2k.h>
 #include <hw/rtl8139.h>
 #include <tasks/elf.h>
 #include <tasks/syscall.h>
@@ -103,6 +104,7 @@ void __attribute__((__cdecl__)) main(multiboot_info_t* mBoot)
 	
 	init(vfs);
 	init(pci);
+	init(ne2k);
 	init(rtl8139);
 	init(syscall);
 
