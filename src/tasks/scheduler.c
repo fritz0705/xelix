@@ -62,6 +62,11 @@ void scheduler_terminateCurrentTask()
 	while(true) asm("int 0x20; hlt");
 }
 
+void scheduler_terminateKernelTask()
+{
+	scheduler_terminateCurrentTask();
+}
+
 void scheduler_remove(task_t *t)
 {
 	log(LOG_DEBUG, "scheduler: Deleting task %d\n", t->pid);
@@ -132,36 +137,9 @@ static struct vm_context *setupMemoryContext(void *stack)
 	return ctx;
 }
 
-
-/* Setup a new task, including the necessary paging context.
- * However, mapping the program itself into the context is
- * UP TO YOU as the scheduler has no clue about how long
- * your program is.
- */
-task_t *scheduler_newTask(void *entry, task_t *parent)
+task_t *scheduler_newTask(task_t *parent)
 {
-	task_t* thisTask = (task_t*)kmalloc(sizeof(task_t));
-	
-	void* stack = kmalloc_a(STACKSIZE);
-	memset(stack, 0, STACKSIZE);
-	
-	thisTask->state = stack + STACKSIZE - sizeof(cpu_state_t) - 3;
-	thisTask->memory_context = setupMemoryContext(stack);
-	thisTask->memory_context = vm_kernelContext;
-
-	// Stack
-	thisTask->state->esp = stack + STACKSIZE - 3;
-	thisTask->state->ebp = thisTask->state->esp;
-
-	*(thisTask->state->ebp + 1) = (intptr_t)scheduler_terminateCurrentTask;
-	*(thisTask->state->ebp + 2) = NULL; // base pointer
-	
-	// Instruction pointer (= start of the program)
-	thisTask->state->eip = entry;
-	thisTask->state->eflags = 0x200;
-	thisTask->state->cs = 0x08;
-	thisTask->state->ds = 0x10;
-	thisTask->state->ss = 0x10;
+	task_t *thisTask = kmalloc(sizeof(task_t));
 
 	thisTask->pid = ++highestPid;
 	thisTask->parent = parent;
@@ -169,6 +147,63 @@ task_t *scheduler_newTask(void *entry, task_t *parent)
 	thisTask->sys_call_conv = (parent == NULL) ? TASK_SYSCONV_LINUX : parent->sys_call_conv;
 
 	return thisTask;
+}
+
+task_t *scheduler_newKernelTask(void *entry, task_t *parent)
+{
+	task_t *thisTask = scheduler_newTask(parent);
+	
+	thisTask->memory_context = vm_kernelContext;
+	thisTask->type = TASK_TYPE_KERNEL;
+	
+	void *stack = kmalloc_a(STACKSIZE);
+	memset(stack, 0, STACKSIZE);
+
+	thisTask->state = stack + STACKSIZE - sizeof(cpu_state_t) - 3;
+	thisTask->state->esp = stack + STACKSIZE - 3;
+	thisTask->state->ebp = thisTask->state->esp;
+
+	*(thisTask->state->ebp + 1) = (intptr_t)scheduler_terminateKernelTask;
+	*(thisTask->state->ebp + 2) = NULL;
+
+	thisTask->state->eip = entry;
+	thisTask->state->eflags = 0x200;
+	thisTask->state->cs = 0x08;
+	thisTask->state->ds = 0x10;
+	thisTask->state->ss = 0x10;
+
+	return thisTask;
+}
+
+task_t *scheduler_newUserTask(void *entry, task_t *parent)
+{
+	task_t *thisTask = scheduler_newTask(parent);
+
+	void *stack = kmalloc_a(STACKSIZE);
+	memset(stack, 0, STACKSIZE);
+	
+	thisTask->memory_context = setupMemoryContext(stack);
+	thisTask->state = stack + STACKSIZE - sizeof(cpu_state_t) - 3;
+	thisTask->type = TASK_TYPE_USER;
+
+	thisTask->state->esp = (char *)0x7ffff000 - sizeof(cpu_state_t) - 3;
+	thisTask->state->ebp = thisTask->state->esp;
+
+	*((char *)stack + STACKSIZE - 3 + 1) = (intptr_t)scheduler_terminateCurrentTask;
+	*((char *)stack + STACKSIZE - 3 + 2) = NULL;
+
+	thisTask->state->eip = entry;
+	thisTask->state->eflags = 0x200;
+	thisTask->state->cs = 0x08;
+	thisTask->state->ds = 0x10;
+	thisTask->state->ss = 0x10;
+
+	return thisTask;
+}
+
+task_t *scheduler_newSyscallTask(void *entry, task_t *parent)
+{
+	return scheduler_newKernelTask(entry, parent);
 }
 
 // Add new task to schedule.

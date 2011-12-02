@@ -32,6 +32,12 @@ typedef struct task {
 
 	struct vm_context *memory_context;
 
+	enum {
+		TASK_TYPE_KERNEL,
+		TASK_TYPE_USER,
+		TASK_TYPE_SYSCALL
+	} type;
+
 	// Current task state
 	enum {
 		TASK_STATE_KILLED,
@@ -50,7 +56,12 @@ typedef struct task {
 
 int scheduler_state;
 
-task_t *scheduler_newTask(void *entry, task_t *parent);
+// Create type-independent task
+task_t *scheduler_newTask(task_t *parent);
+task_t *scheduler_newKernelTask(void *entry, task_t *parent);
+task_t *scheduler_newSyscallTask(void *entry, task_t *parent);
+task_t *scheduler_newUserTask(void *entry, task_t *parent);
+
 void scheduler_add(task_t *task);
 void scheduler_terminateCurrentTask();
 task_t* scheduler_getCurrentTask();

@@ -75,6 +75,8 @@ static void executeCommand(char *command)
 	}
 	else if(strcmp(command, "dump") == 0)
 		vm_dump(vm_currentContext);
+	else if(strcmp(command, "hlt") == 0)
+		asm("hlt;");
 	else
 	{
 		if(strlen(command) > 0 && command[0] != '-') // Note: I wanted / still want # for comments, however our keyboard driver doesn't know it...
