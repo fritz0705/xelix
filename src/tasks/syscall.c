@@ -26,41 +26,48 @@
 
 #include "syscalls.h"
 
+static void syscallMain()
+{
+	task_t *task = scheduler_getCurrentTask();
+	syscall_t call = syscall_table[task->syscall.num];
+
+	int retval = call(task->syscall);
+
+	task->parent->state->eax = retval;
+	task->parent->task_state = TASK_STATE_RUNNING;
+	task->task_state = TASK_STATE_TERMINATED;
+	scheduler_yield();
+}
+
 static void intHandler(cpu_state_t* regs)
 {
-	struct syscall syscall;
+	task_t *task = scheduler_newSyscallTask(syscallMain, scheduler_getCurrentTask());
 	if (scheduler_getCurrentTask()->sys_call_conv == TASK_SYSCONV_LINUX)
 	{
 		// Linux syscall calling convention
-		syscall.num = regs->eax;
-		syscall.params[0] = regs->ebx;
-		syscall.params[1] = regs->ecx;
-		syscall.params[2] = regs->edx;
-		syscall.params[3] = regs->esi;
-		syscall.params[4] = regs->edi;
-		syscall.params[5] = (int)regs->ebp;
+		task->syscall.num = regs->eax;
+		task->syscall.params[0] = regs->ebx;
+		task->syscall.params[1] = regs->ecx;
+		task->syscall.params[2] = regs->edx;
+		task->syscall.params[3] = regs->esi;
+		task->syscall.params[4] = regs->edi;
+		task->syscall.params[5] = (int)regs->ebp;
 	}
 	else
 	{
-		// Unix syscall calling convention
-		syscall.num = regs->eax;
-		syscall.params[0] = *((int *)regs->esp + sizeof(int));
-		syscall.params[1] = *((int *)regs->esp + sizeof(int) * 2);
-		syscall.params[2] = *((int *)regs->esp + sizeof(int) * 3);
-		syscall.params[3] = *((int *)regs->esp + sizeof(int) * 4);
-		syscall.params[4] = *((int *)regs->esp + sizeof(int) * 5);
-		syscall.params[5] = *((int *)regs->esp + sizeof(int) * 6);
+		// Unix task->syscall calling convention
+		task->syscall.num = regs->eax;
+		task->syscall.params[0] = *((int *)regs->esp + sizeof(int));
+		task->syscall.params[1] = *((int *)regs->esp + sizeof(int) * 2);
+		task->syscall.params[2] = *((int *)regs->esp + sizeof(int) * 3);
+		task->syscall.params[3] = *((int *)regs->esp + sizeof(int) * 4);
+		task->syscall.params[4] = *((int *)regs->esp + sizeof(int) * 5);
+		task->syscall.params[5] = *((int *)regs->esp + sizeof(int) * 6);
 	}
 
-	syscall_t call = syscall_table[syscall.num];
-	if (syscall.num >= sizeof(syscall_table) / sizeof(syscall_t) || call == NULL)
-	{
-		log(LOG_INFO, "syscall: Invalid syscall %d\n", syscall.num);
-		syscall.num = -1;
-		return;
-	}
-
-	regs->eax = call(syscall);
+	scheduler_getCurrentTask()->task_state = TASK_STATE_BLOCKING;
+	scheduler_add(task);
+	scheduler_yield();
 }
 
 void syscall_init()

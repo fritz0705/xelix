@@ -21,6 +21,7 @@
 #include <lib/generic.h>
 #include <hw/cpu.h>
 #include <memory/vm.h>
+#include "syscall.h"
 
 // Single linked list
 typedef struct task {
@@ -52,6 +53,8 @@ typedef struct task {
 		TASK_SYSCONV_LINUX,
 		TASK_SYSCONV_UNIX
 	} sys_call_conv;
+	
+	struct syscall syscall;
 } task_t;
 
 int scheduler_state;
