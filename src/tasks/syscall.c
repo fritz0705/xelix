@@ -34,7 +34,8 @@ static void syscallMain()
 	int retval = call(task->syscall);
 
 	task->parent->state->eax = retval;
-	task->parent->task_state = TASK_STATE_RUNNING;
+	if (task->parent->task_state == TASK_STATE_BLOCKING)
+		task->parent->task_state = TASK_STATE_RUNNING;
 	task->task_state = TASK_STATE_TERMINATED;
 	scheduler_yield();
 }
@@ -42,7 +43,7 @@ static void syscallMain()
 static void intHandler(cpu_state_t* regs)
 {
 	task_t *task = scheduler_newSyscallTask(syscallMain, scheduler_getCurrentTask());
-	if (scheduler_getCurrentTask()->sys_call_conv == TASK_SYSCONV_LINUX)
+	if (task->parent->sys_call_conv == TASK_SYSCONV_LINUX)
 	{
 		// Linux syscall calling convention
 		task->syscall.num = regs->eax;
@@ -65,7 +66,7 @@ static void intHandler(cpu_state_t* regs)
 		task->syscall.params[5] = *((int *)regs->esp + sizeof(int) * 6);
 	}
 
-	scheduler_getCurrentTask()->task_state = TASK_STATE_BLOCKING;
+	task->parent->task_state = TASK_STATE_BLOCKING;
 	scheduler_add(task);
 	scheduler_yield();
 }

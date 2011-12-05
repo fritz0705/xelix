@@ -270,6 +270,7 @@ task_t* scheduler_select(cpu_state_t* lastRegs)
 			if (currentTask->next == currentTask)
 				currentTask->next = NULL;
 			scheduler_remove(currentTask);
+			continue;
 		}
 
 		if (unlikely(currentTask == NULL || currentTask->task_state == TASK_STATE_RUNNING))
