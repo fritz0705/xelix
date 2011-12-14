@@ -45,7 +45,7 @@
 #include <tasks/elf.h>
 #include <tasks/syscall.h>
 #include <memory/paging.h>
-#include <memory/vm.h>
+#include <memory/vmem.h>
 #include <net/slip.h>
 
 // Prints out compiler information, especially for GNU GCC
@@ -95,7 +95,7 @@ void __attribute__((__cdecl__)) main(multiboot_info_t* mBoot)
 	init(pci);
 	init(rtl8139);
 	init(syscall);
-	init(vm);
+	init(vmem);
 	init(paging);
 	
 #	ifndef XELIX_WITHOUT_SLIP
@@ -104,10 +104,10 @@ void __attribute__((__cdecl__)) main(multiboot_info_t* mBoot)
 #	endif
 
 	if(multiboot_info->modsCount)
-		elf_load((void*)multiboot_info->modsAddr[0].start);
+		elf_load((void*)multiboot_info->modsAddr[0].start, "initrd");
 
 	if(multiboot_info->modsCount < 1)
-		scheduler_add(scheduler_newTask(debugconsole_init, NULL));
+		scheduler_add(scheduler_newTask(debugconsole_init, NULL, "debugconsole"));
 
 	/* Is intentionally last. It's also intentional that the init()
 	 * macro isn't used here. Seriously, don't mess around here.

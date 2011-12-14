@@ -45,7 +45,7 @@ static void printPrompt()
 
 // Execute a command
 // Yes, this is only a bunch of hardcoded crap
-static void executeCommand(char *command)
+static void executeCommand(char *command, int argc, char **argv)
 {
 	if(strcmp(command, "reboot") == 0) reboot();
 	else if(strcmp(command, "clear") == 0) printf("\e[H\e[2J");
@@ -61,23 +61,37 @@ static void executeCommand(char *command)
 	else if(strcmp(command, "kill") == 0) asm("mov %eax, 1; int 0x80;");
 	else if(strcmp(command, "triplefault") == 0)
 	{
-		struct vm_context *ctx = vm_new();
+		struct vmem_context *ctx = vmem_new();
 		paging_apply(ctx);
 	}
 	else if(strcmp(command, "pagefault") == 0)
-		*((char *)vm_faultAddress) = 0;
+		*((char *)vmem_faultAddress) = 0;
 	else if(strcmp(command, "reload") == 0)
-		paging_apply(vm_kernelContext);
+		paging_apply(vmem_kernelContext);
 	else if(strcmp(command, "rebuild") == 0)
 	{
-		vm_set_cache(vm_kernelContext, NULL);
-		paging_apply(vm_kernelContext);
+		vmem_set_cache(vmem_kernelContext, NULL);
+		paging_apply(vmem_kernelContext);
 	}
 	else if(strcmp(command, "dump") == 0)
-		vm_dump(vm_currentContext);
+		vmem_dump(vmem_currentContext);
+    else if (strcmp(command, "kb") == 0)
+    {
+        if (argc != 1)
+        {
+            printf("usage: kb <layoutname>\n");
+            return;
+        }
+
+        if (keyboard_setlayout(argv[0]) == -1)
+        {
+            printf("unknown layout\n");
+            return;
+        }
+    }
 	else
 	{
-		if(strlen(command) > 0 && command[0] != '-') // Note: I wanted / still want # for comments, however our keyboard driver doesn't know it...
+		if(strlen(command) > 0 && command[0] != '#')
 			printf("error: command '%s' not found.\n", command);
 	}
 }
@@ -115,6 +129,17 @@ void debugconsole_init()
 			read_offset += read;
 		}
 
-		executeCommand(currentLine);
+        char *strtok;
+        char *command = kmalloc(sizeof(char) * 255);
+        char *arg = kmalloc(sizeof(char) * 32);
+        char **argv = kmalloc(sizeof(char*) * 32);
+        uint8_t argc = 0;
+
+        command = strtok_r(currentLine, " ", &strtok);
+        while ((arg = strtok_r(NULL, " ", &strtok))) {
+            argv[argc++] = arg;
+        }
+
+		executeCommand(command, argc, argv);
 	}
 }
