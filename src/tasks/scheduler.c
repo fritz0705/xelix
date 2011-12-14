@@ -82,13 +82,13 @@ static struct vmem_context *setupMemoryContext(void *stack)
 	struct vmem_context *ctx = vmem_new();
 	
 	/* Map the interrupt-handler stack */
-	struct vm_page *intStack = vm_new_page();
+	struct vmem_page *intStack = vmem_new_page();
 	intStack->allocated = 1;
-	intStack->section = VM_SECTION_KERNEL;
+	intStack->section = VMEM_SECTION_KERNEL;
 	intStack->virt_addr = NULL;
 	intStack->phys_addr = NULL;
 
-	vm_add_page(ctx, intStack);
+	vmem_add_page(ctx, intStack);
 
 	/* Protect unused kernel space (0x7fff0000 - 0x7fffc000) */
 	for(int addr = 0x7fff0000; addr <= 0x7fffc000; addr += PAGE_SIZE)
