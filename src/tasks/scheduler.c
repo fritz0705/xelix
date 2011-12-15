@@ -81,11 +81,20 @@ void scheduler_remove(task_t *t)
 	t->last->next = t->next;
 }
 
-static struct vmem_context *setupMemoryContext(void *stack)
+static struct vmem_context *setupMemoryContext(void *stack, task_t* task)
 {
 	log(LOG_DEBUG, "scheduler: Setup new Memory Context [%d]\n", stack);
 	struct vmem_context *ctx = vmem_new();
 	
+	/* Map the task */
+	struct vmem_page *taskPage = vmem_new_page();
+	taskPage->allocated = 1;
+	taskPage->section = VMEM_SECTION_KERNEL;
+	taskPage->virt_addr = task;
+	taskPage->phys_addr = task;
+
+	vmem_add_page(ctx, taskPage);
+
 	/* Map the interrupt-handler stack */
 	struct vmem_page *intStack = vmem_new_page();
 	intStack->allocated = 1;
@@ -154,7 +163,7 @@ static struct vmem_context *setupMemoryContext(void *stack)
 
 task_t *scheduler_newTask(task_t *parent, char name[SCHEDULER_MAXNAME])
 {
-	task_t *thisTask = kmalloc(sizeof(task_t));
+	task_t *thisTask = kmalloc_a(sizeof(task_t));
 
 	thisTask->pid = ++highestPid;
 	thisTask->parent = parent;
@@ -203,7 +212,7 @@ task_t *scheduler_newUserTask(void *entry, task_t *parent, char name[SCHEDULER_M
 	void *stack = kmalloc_a(STACKSIZE);
 	memset(stack, 0, STACKSIZE);
 	
-	thisTask->memory_context = setupMemoryContext(stack);
+	thisTask->memory_context = setupMemoryContext(stack, thisTask);
 	thisTask->state = stack + STACKSIZE - sizeof(cpu_state_t) - 3;
 	thisTask->type = TASK_TYPE_USER;
 
