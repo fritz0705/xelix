@@ -190,6 +190,7 @@ task_t *scheduler_newKernelTask(void *entry, task_t *parent, char name[SCHEDULER
 	thisTask->type = TASK_TYPE_KERNEL;
 
 	thisTask->state = stack + STACKSIZE - sizeof(cpu_state_t) - 3;
+	thisTask->virt_state = thisTask->state;
 	thisTask->state->esp = stack + STACKSIZE - 3;
 	thisTask->state->ebp = thisTask->state->esp;
 
@@ -214,6 +215,7 @@ task_t *scheduler_newUserTask(void *entry, task_t *parent, char name[SCHEDULER_M
 	
 	thisTask->memory_context = setupMemoryContext(stack, thisTask);
 	thisTask->state = stack + STACKSIZE - sizeof(cpu_state_t) - 3;
+	thisTask->virt_state = (cpu_state_t*)0x7fffffc1;
 	thisTask->type = TASK_TYPE_USER;
 
 	thisTask->state->esp = (char *)0x7ffff000 - sizeof(cpu_state_t) - 3;
@@ -273,6 +275,8 @@ task_t* scheduler_select(cpu_state_t* lastRegs)
 	}
 
 	currentTask->state = lastRegs;
+	if (currentTask->type != TASK_TYPE_USER)
+		currentTask->virt_state = lastRegs;
 
 	if(skipnext == SKIP_WAIT) skipnext = SKIP_NEXT;
 	else if(skipnext == SKIP_NEXT)

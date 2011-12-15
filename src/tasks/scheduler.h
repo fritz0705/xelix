@@ -58,6 +58,8 @@ typedef struct task {
 	} sys_call_conv;
 	
 	struct syscall syscall;
+	/* Virtual address of the state */
+	cpu_state_t* virt_state;
 } task_t;
 
 int scheduler_state;
