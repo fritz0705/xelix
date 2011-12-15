@@ -63,6 +63,6 @@ int elf_load(elf_t* bin, char name[SCHEDULER_MAXNAME])
 		memcpy(phead->virtaddr, (void*)bin + phead->offset, phead->filesize);	
 	}
 
-	scheduler_add(scheduler_newTask(bin->entry, NULL, name));
+	scheduler_add(scheduler_newUserTask(bin->entry, NULL, name));
 	return 0;
 }
