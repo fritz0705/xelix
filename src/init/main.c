@@ -42,6 +42,7 @@
 #include <console/interface.h>
 #include <hw/pci.h>
 #include <hw/rtl8139.h>
+#include <hw/e1000.h>
 #include <tasks/elf.h>
 #include <tasks/syscall.h>
 #include <memory/paging.h>
@@ -103,6 +104,7 @@ void __attribute__((__cdecl__)) main(multiboot_info_t* mBoot)
 
 	// Networking
 	init(rtl8139);
+	init(e1000);
 	#ifndef XELIX_WITHOUT_SLIP
 		init(slip);
 	#endif
