@@ -60,6 +60,7 @@ void (*vmem_applyPage)(struct vmem_context *, struct vmem_page *);
 struct vmem_context *vmem_new();
 struct vmem_page *vmem_new_page();
 
+int vmem_replace_page(struct vmem_context *ctx, struct vmem_page *pg);
 int vmem_add_page(struct vmem_context *ctx, struct vmem_page *pg);
 
 struct vmem_page *vmem_get_page_phys(struct vmem_context *ctx, void *phys_addr);
