@@ -19,10 +19,14 @@
 
 #include "exit.h"
 #include <tasks/scheduler.h>
+#include <lib/log.h>
 
 int sys_exit(struct syscall syscall)
 {
-	scheduler_getCurrentTask()->task_state = TASK_STATE_TERMINATED;
+	task_t *task = scheduler_getCurrentTask()->parent;
+
+	log(LOG_DEBUG, "Terminated task %d\n", task->pid);
+	task->task_state = TASK_STATE_TERMINATED;
 	scheduler_yield();
 	return 0;
 }

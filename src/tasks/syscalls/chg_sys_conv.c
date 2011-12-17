@@ -22,7 +22,7 @@
 
 int sys_chg_sys_conv(struct syscall syscall)
 {
-	task_t *currTask = scheduler_getCurrentTask();
+	task_t *currTask = scheduler_getCurrentTask()->parent;
 
 	if (currTask->sys_call_conv == TASK_SYSCONV_LINUX)
 		currTask->sys_call_conv = TASK_SYSCONV_UNIX;

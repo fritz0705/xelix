@@ -68,6 +68,11 @@ void scheduler_terminateCurrentTask()
 	scheduler_yield();
 }
 
+void scheduler_terminateKernelTask()
+{
+	scheduler_terminateCurrentTask();
+}
+
 void scheduler_remove(task_t *t)
 {
 	log(LOG_DEBUG, "scheduler: Deleting task %d <%s>\n", t->pid, t->name);
@@ -76,11 +81,29 @@ void scheduler_remove(task_t *t)
 	t->last->next = t->next;
 }
 
-static struct vmem_context *setupMemoryContext(void *stack)
+static struct vmem_context *setupMemoryContext(void *stack, task_t* task)
 {
 	log(LOG_DEBUG, "scheduler: Setup new Memory Context [%d]\n", stack);
 	struct vmem_context *ctx = vmem_new();
 	
+	/* Map the task */
+	struct vmem_page *taskPage = vmem_new_page();
+	taskPage->allocated = 1;
+	taskPage->section = VMEM_SECTION_KERNEL;
+	taskPage->virt_addr = task;
+	taskPage->phys_addr = task;
+
+	vmem_add_page(ctx, taskPage);
+
+	/* Map the interrupt-handler stack */
+	struct vmem_page *intStack = vmem_new_page();
+	intStack->allocated = 1;
+	intStack->section = VMEM_SECTION_KERNEL;
+	intStack->virt_addr = NULL;
+	intStack->phys_addr = NULL;
+
+	vmem_add_page(ctx, intStack);
+
 	/* Protect unused kernel space (0x7fff0000 - 0x7fffc000) */
 	for(int addr = 0x7fff0000; addr <= 0x7fffc000; addr += PAGE_SIZE)
 	{
@@ -138,44 +161,81 @@ static struct vmem_context *setupMemoryContext(void *stack)
 	return ctx;
 }
 
+task_t *scheduler_newTask(task_t *parent, char name[SCHEDULER_MAXNAME])
+{
+	task_t *thisTask = kmalloc_a(sizeof(task_t));
+
+	thisTask->pid = ++highestPid;
+	thisTask->parent = parent;
+	thisTask->task_state = TASK_STATE_RUNNING;
+	thisTask->sys_call_conv = (parent == NULL) ? TASK_SYSCONV_LINUX : parent->sys_call_conv;
+	strcpy(thisTask->name, name);
+
+	return thisTask;
+}
 
 /* Setup a new task, including the necessary paging context.
  * However, mapping the program itself into the context is
  * UP TO YOU as the scheduler has no clue about how long
  * your program is.
  */
-task_t *scheduler_newTask(void *entry, task_t *parent, char name[SCHEDULER_MAXNAME])
+task_t *scheduler_newKernelTask(void *entry, task_t *parent, char name[SCHEDULER_MAXNAME])
 {
-	task_t* thisTask = (task_t*)kmalloc(sizeof(task_t));
-	
-	void* stack = kmalloc_a(STACKSIZE);
+	task_t *thisTask = scheduler_newTask(parent, name);
+
+	void *stack = kmalloc_a(STACKSIZE);
 	memset(stack, 0, STACKSIZE);
 	
-	thisTask->state = stack + STACKSIZE - sizeof(cpu_state_t) - 3;
-	thisTask->memory_context = setupMemoryContext(stack);
 	thisTask->memory_context = vmem_kernelContext;
+	thisTask->type = TASK_TYPE_KERNEL;
 
-	// Stack
+	thisTask->state = stack + STACKSIZE - sizeof(cpu_state_t) - 3;
+	thisTask->virt_state = thisTask->state;
 	thisTask->state->esp = stack + STACKSIZE - 3;
 	thisTask->state->ebp = thisTask->state->esp;
 
-	*(thisTask->state->ebp + 1) = (intptr_t)scheduler_terminateCurrentTask;
-	*(thisTask->state->ebp + 2) = NULL; // base pointer
-	
-	// Instruction pointer (= start of the program)
+	*(thisTask->state->ebp + 1) = (intptr_t)scheduler_terminateKernelTask;
+	*(thisTask->state->ebp + 2) = NULL;
+
 	thisTask->state->eip = entry;
 	thisTask->state->eflags = 0x200;
 	thisTask->state->cs = 0x08;
 	thisTask->state->ds = 0x10;
 	thisTask->state->ss = 0x10;
 
-	thisTask->pid = ++highestPid;
-	strcpy(thisTask->name, name);
-	thisTask->parent = parent;
-	thisTask->task_state = TASK_STATE_RUNNING;
-	thisTask->sys_call_conv = (parent == NULL) ? TASK_SYSCONV_LINUX : parent->sys_call_conv;
+	return thisTask;
+}
+
+task_t *scheduler_newUserTask(void *entry, task_t *parent, char name[SCHEDULER_MAXNAME])
+{
+	task_t *thisTask = scheduler_newTask(parent, name);
+
+	void *stack = kmalloc_a(STACKSIZE);
+	memset(stack, 0, STACKSIZE);
+	
+	thisTask->memory_context = setupMemoryContext(stack, thisTask);
+	thisTask->state = stack + STACKSIZE - sizeof(cpu_state_t) - 3;
+	thisTask->virt_state = (cpu_state_t*)0x7fffffc1;
+	thisTask->type = TASK_TYPE_USER;
+
+	thisTask->state->esp = (char *)0x7ffff000 - sizeof(cpu_state_t) - 3;
+	thisTask->state->ebp = thisTask->state->esp;
+
+	*((char *)stack + STACKSIZE - 3 + 1) = (intptr_t)scheduler_terminateCurrentTask;
+	*((char *)stack + STACKSIZE - 3 + 2) = NULL;
+
+	thisTask->state->eip = entry;
+	thisTask->state->eflags = 0x200;
+	thisTask->state->cs = 0x08;
+	thisTask->state->ds = 0x10;
+	thisTask->state->ss = 0x10;
 
 	return thisTask;
+}
+
+task_t *scheduler_newSyscallTask(void *entry, task_t *parent, char name[SCHEDULER_MAXNAME])
+{
+	return scheduler_newKernelTask(entry, parent, name);
 }
 
 // Add new task to schedule.
@@ -215,6 +275,8 @@ task_t* scheduler_select(cpu_state_t* lastRegs)
 	}
 
 	currentTask->state = lastRegs;
+	if (currentTask->type != TASK_TYPE_USER)
+		currentTask->virt_state = lastRegs;
 
 	if(skipnext == SKIP_WAIT) skipnext = SKIP_NEXT;
 	else if(skipnext == SKIP_NEXT)
@@ -233,6 +295,7 @@ task_t* scheduler_select(cpu_state_t* lastRegs)
 			if (currentTask->next == currentTask)
 				currentTask->next = NULL;
 			scheduler_remove(currentTask);
+			continue;
 		}
 
 		if (unlikely(currentTask == NULL || currentTask->task_state == TASK_STATE_RUNNING))

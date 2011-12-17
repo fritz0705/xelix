@@ -22,6 +22,7 @@
 #include "string.h"
 #include <hw/pit.h>
 #include <memory/kmalloc.h>
+#include <tasks/scheduler.h>
 
 // Get the current day, month, year, time etc.
 int date(char dateStr)
@@ -90,6 +91,7 @@ void sleep(time_t timeout)
 	int startTick = pit_getTickNum();
 	while(1)
 	{
+		scheduler_yield();
 		if(pit_getTickNum() > startTick + timeout) break;
 	}
 }

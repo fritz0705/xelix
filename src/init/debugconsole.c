@@ -75,20 +75,22 @@ static void executeCommand(char *command, int argc, char **argv)
 	}
 	else if(strcmp(command, "dump") == 0)
 		vmem_dump(vmem_currentContext);
-    else if (strcmp(command, "kb") == 0)
-    {
-        if (argc != 1)
-        {
-            printf("usage: kb <layoutname>\n");
-            return;
-        }
+	else if (strcmp(command, "kb") == 0)
+	{
+		if (argc != 1)
+		{
+			printf("usage: kb <layoutname>\n");
+			return;
+		}
 
-        if (keyboard_setlayout(argv[0]) == -1)
-        {
-            printf("unknown layout\n");
-            return;
-        }
-    }
+		if (keyboard_setlayout(argv[0]) == -1)
+		{
+			printf("unknown layout\n");
+			return;
+		}
+	}
+	else if(strcmp(command, "hlt") == 0)
+		asm("hlt;");
 	else
 	{
 		if(strlen(command) > 0 && command[0] != '#')

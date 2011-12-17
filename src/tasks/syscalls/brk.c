@@ -19,13 +19,15 @@
 
 #include "brk.h"
 #include <memory/vmem.h>
+#include <tasks/scheduler.h>
 #include <memory/kmalloc.h>
 
 #define alignedMemoryPosition() (kmalloc_getMemoryPosition() + 4096 - (kmalloc_getMemoryPosition() % 4096))
 
 int sys_brk(struct syscall syscall)
 {
-	if (vmem_currentContext == vmem_kernelContext)
+	struct vmem_context *ctx = scheduler_getCurrentTask()->parent->memory_context;
+	if (ctx == vmem_kernelContext)
 	{
 		if (syscall.params[0] == 0)
 			return alignedMemoryPosition();
