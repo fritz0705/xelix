@@ -19,25 +19,10 @@
  */
 
 #include <lib/generic.h>
-#include <lib/stdint.h>
 
-// Legacy
-#define outb(args...) portio_out8(args)
-#define outw(args...) portio_out16(args)
-#define outl(args...) portio_out32(args)
-#define outq(args...) portio_out64(args)
+#define SPINLOCK_LOCKED 1
+#define SPINLOCK_UNLOCKED 0
 
-#define inb(args...) portio_in8(args)
-#define inw(args...) portio_in16(args)
-#define inl(args...) portio_in32(args)
-#define inq(args...) portio_in64(args)
-
-void portio_out8(uint16_t port, uint8_t value);
-void portio_out16(uint16_t port, uint16_t value);
-void portio_out32(uint16_t port, uint32_t value);
-void portio_out64(uint16_t port, uint64_t value);
-
-uint8_t portio_in8(uint16_t port);
-uint16_t portio_in16(uint16_t port);
-uint32_t portio_in32(uint16_t port);
-uint64_t portio_in64(uint16_t port);
+typedef uint8_t spinlock_t;
+uint32_t spinlock_get(spinlock_t* lock, uint32_t numretries);
+void spinlock_release(spinlock_t* lock);
