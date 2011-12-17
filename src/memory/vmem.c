@@ -64,7 +64,8 @@ void vmem_init()
 
 	vmem_add_page(ctx, debugPage);
 	
-	for (char *i = (char*)0; i <= (char*)0xffffe000U; i += 4096)
+	/* Map only the first Gibibyte */
+	for (char *i = (char*)0; i <= (char*)0x40000000U; i += 4096)
 	{
 		if (i == vmem_faultAddress)
 			continue;
