@@ -32,22 +32,166 @@
 #define DEVICE_ID 0x100E
 
 #define REG_CTL 0x00
+#define REG_STATUS 0x8
+#define REG_EECD 0x10
+#define REG_EEPROM_READ 0x14
+#define REG_VET 0x38
+
 #define REG_RX_CTL 0x100
 #define REG_TX_CTL 0x400
 
+#define REG_RXDESC_ADDR_LO 0x2800
+#define REG_RXDESC_ADDR_HI 0x2804
+#define REG_RXDESC_LEN 0x2808
+#define REG_RXDESC_HEAD 0x2810
+#define REG_RXDESC_TAIL 0x2818
+
+#define REG_RX_DELAY_TIMER 0x2820
+#define REG_RADV 0x282c
+
+#define REG_TXDESC_ADDR_LO 0x3800
+#define REG_TXDESC_ADDR_HI 0x3804
+#define REG_TXDESC_LEN 0x3808
+#define REG_TXDESC_HEAD 0x3810
+#define REG_TXDESC_TAIL 0x3818
+
+#define EERD_START (1 << 0)
+#define EERD_DONE  (1 << 4)
+
+#define E1000_EECD_SK 0x1
+#define E1000_EECD_DI 0x4
+#define E1000_EECD_DO 0x8
+
+#define EEPROM_OFS_MAC 0x0
+
+#define REG_TX_DELAY_TIMER 0x3820
+#define REG_TADV 0x382c
+
 #define CTL_RESET (1 << 26)
 #define CTL_PHY_RESET (1 << 31)
+#define CTL_AUTO_SPEED (1 << 5)
+#define CTL_LINK_UP (1 << 6)
+
+#define RX_BUFFER_NUM 8
+#define TX_BUFFER_NUM 8
+
+#define RX_BUFFER_SIZE 2048
+#define TX_BUFFER_SIZE 2048
 
 #define reg_in32(card, port) *((uint32_t*)(((char*)card->pciDevice->membase) + port))
 #define reg_out32(card, port, value) (reg_in32(card, port) = value)
 
+struct e1000_tx_descriptor {
+	uint64_t buffer;
+	uint16_t length;
+	uint8_t checksum_offset;
+	uint8_t cmd;
+	uint8_t status;
+	uint8_t checksum_start;
+	uint16_t special;
+} __attribute__((__packed__));
+
+struct e1000_rx_descriptor {
+	uint64_t buffer;
+	uint16_t length;
+	uint16_t padding;
+	uint8_t status;
+	uint8_t error;
+	uint16_t padding2;
+} __attribute__((__packed__));
+
 struct e1000_card {
 	pci_device_t* pciDevice;
 	net_device_t* netDevice;
+
+	struct e1000_tx_descriptor tx_desc[TX_BUFFER_NUM];
+	uint8_t *tx_buffer[TX_BUFFER_NUM];
+	uint32_t tx_cur_buffer;
+
+	struct e1000_rx_descriptor rx_desc[RX_BUFFER_NUM];
+	uint8_t *rx_buffer[RX_BUFFER_NUM];
+	uint32_t rx_cur_buffer;
 };
 
 static int cards = 0;
 static struct e1000_card e1000_cards[MAX_CARDS];
+
+static inline void reg_out_flush(struct e1000_card *card)
+{
+	reg_out32(card, REG_STATUS, reg_in32(card, REG_STATUS));
+}
+
+/*
+static void raiseEEPROMClock(struct e1000_card *card, uint32_t *eecd)
+{
+	*eecd |= E1000_EECD_SK;
+	reg_out32(card, REG_EECD, *eecd);
+	reg_out_flush(card);
+}
+
+static void lowerEEPROMClock(struct e1000_card *card, uint32_t *eecd)
+{
+	*eecd |= E1000_EECD_SK;
+	reg_out32(card, REG_EECD, *eecd);
+	reg_out_flush(card);
+}
+
+static uint16_t readEEPROMBits(struct e1000_card *card)
+{
+	uint32_t eecd = reg_in32(card, REG_EECD) & ~(E1000_EECD_DO | E1000_EECD_DI);
+	uint16_t data = 0;;
+
+	for (int i = 0; i < 16; ++i)
+	{
+		data <<= 1;
+		raiseEEPROMClock(card, &eecd);
+
+		eecd = reg_in32(card, REG_EECD) & ~E1000_EECD_DI;
+		if (eecd & E1000_EECD_DO)
+			data |= 1;
+
+		lowerEEPROMClock(card, &eecd);
+	}
+
+	return data;
+}
+*/
+
+static uint32_t readEERD(struct e1000_card *card, uint16_t offset)
+{
+	uint32_t eerd;
+	reg_out32(card, REG_EEPROM_READ, (offset << 8) | EERD_START);
+
+	for (int i = 0; i < 100; ++i)
+	{
+		eerd = reg_in32(card, REG_EEPROM_READ);
+		if (eerd & EERD_DONE)
+			break;
+	}
+	
+	if (eerd & EERD_DONE)
+		return (eerd >> 16) & 0xffff;
+
+	return (uint32_t) -1;
+}
+
+static uint16_t readEEPROM(struct e1000_card *card, uint16_t offset)
+{
+	uint32_t data = readEERD(card, offset);
+	if ((data == ((uint32_t) -1)))
+	{
+		log(LOG_WARN, "e1000: Could not read EEPROM via EERD\n");
+		return -1;
+	}
+
+	return data;
+}
+
+static void loadMACAddress(struct e1000_card *card, uint16_t *ptr)
+{
+	for (int i = 0; i < 3; ++i)
+		ptr[i] = readEEPROM(card, EEPROM_OFS_MAC + i);
+}
 
 static void enableCard(struct e1000_card *card)
 {
@@ -57,11 +201,35 @@ static void enableCard(struct e1000_card *card)
 
 	// Reset card
 	reg_out32(card, REG_CTL, CTL_PHY_RESET);
+	reg_out32(card, REG_CTL, CTL_RESET);
+
+	while (reg_in32(card, REG_CTL) & CTL_RESET);
+
+	reg_out32(card, REG_CTL, CTL_AUTO_SPEED | CTL_LINK_UP);
+
+	reg_out32(card, REG_RXDESC_ADDR_HI, 0);
+	reg_out32(card, REG_RXDESC_ADDR_LO, (intptr_t)card->rx_desc);
+	reg_out32(card, REG_RXDESC_LEN, RX_BUFFER_NUM * sizeof(struct e1000_rx_descriptor));
+	reg_out32(card, REG_RXDESC_HEAD, 0);
+	reg_out32(card, REG_RXDESC_TAIL, RX_BUFFER_NUM - 1);
+	reg_out32(card, REG_RX_DELAY_TIMER, 0);
+	reg_out32(card, REG_RADV, 0);
+
+	reg_out32(card, REG_TXDESC_ADDR_HI, 0);
+	reg_out32(card, REG_TXDESC_ADDR_LO, (intptr_t)card->tx_desc);
+	reg_out32(card, REG_TXDESC_LEN, TX_BUFFER_NUM * sizeof(struct e1000_rx_descriptor));
+	reg_out32(card, REG_TXDESC_HEAD, 0);
+	reg_out32(card, REG_TXDESC_TAIL, 0);
+	reg_out32(card, REG_TX_DELAY_TIMER, 0);
+	reg_out32(card, REG_TADV, 0);
+
+	reg_out32(card, REG_VET, 0);
 
 	card->netDevice = kmalloc(sizeof(net_device_t));
+	loadMACAddress(card, (uint16_t*)card->netDevice->hwaddr);
+
 	strcpy(card->netDevice->name, "eth");
 	strcpy(card->netDevice->name + 3, itoa(net_ether_offset++, 10));
-	memset(card->netDevice->hwaddr, 0, 6);
 	card->netDevice->mtu = 1500;
 	card->netDevice->proto = NET_PROTO_ETH;
 	card->netDevice->send = NULL;
