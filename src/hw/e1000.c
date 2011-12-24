@@ -25,6 +25,7 @@
 #include <net/net.h>
 #include <net/ether.h>
 #include <lib/string.h>
+#include <interrupts/interface.h>
 
 #define MAX_CARDS 50
 
@@ -36,6 +37,10 @@
 #define REG_EECD 0x10
 #define REG_EEPROM_READ 0x14
 #define REG_VET 0x38
+
+#define REG_INTR_CAUSE 0xc0
+#define REG_INTR_MASK 0xd0
+#define REG_INTR_MASK_CLR 0xd8
 
 #define REG_RX_CTL 0x100
 #define REG_TX_CTL 0x400
@@ -55,6 +60,8 @@
 #define REG_TXDESC_HEAD 0x3810
 #define REG_TXDESC_TAIL 0x3818
 
+#define REG_RECV_ADDR_LIST 0x5400
+
 #define EERD_START (1 << 0)
 #define EERD_DONE  (1 << 4)
 
@@ -71,6 +78,19 @@
 #define CTL_PHY_RESET (1 << 31)
 #define CTL_AUTO_SPEED (1 << 5)
 #define CTL_LINK_UP (1 << 6)
+
+#define RCTL_ENABLE (1 << 1)
+#define RCTL_BROADCAST (1 << 15)
+#define RCTL_2K_BUFSIZE (0 << 16)
+
+#define TCTL_ENABLE (1 << 1)
+#define TCTL_PADDING (1 << 2)
+#define TCTL_COLL_TSH (0x0f << 4)
+#define TCTL_COLL_DIST (0x40 << 12)
+
+#define RAH_VALID (1 << 31)
+
+#define ICR_RECEIVE (1 << 7)
 
 #define RX_BUFFER_NUM 8
 #define TX_BUFFER_NUM 8
@@ -105,11 +125,11 @@ struct e1000_card {
 	net_device_t* netDevice;
 
 	struct e1000_tx_descriptor tx_desc[TX_BUFFER_NUM];
-	uint8_t *tx_buffer[TX_BUFFER_NUM];
+	uint8_t *tx_buffer;
 	uint32_t tx_cur_buffer;
 
 	struct e1000_rx_descriptor rx_desc[RX_BUFFER_NUM];
-	uint8_t *rx_buffer[RX_BUFFER_NUM];
+	uint8_t *rx_buffer;
 	uint32_t rx_cur_buffer;
 };
 
@@ -193,6 +213,41 @@ static void loadMACAddress(struct e1000_card *card, uint16_t *ptr)
 		ptr[i] = readEEPROM(card, EEPROM_OFS_MAC + i);
 }
 
+static void handleInterrupt(cpu_state_t *state)
+{
+	log(LOG_DEBUG, "e1000: Got Interrupt\n");
+
+	for (int i = 0; i < cards; ++i)
+	{
+		struct e1000_card *card = e1000_cards + i;
+
+		uint32_t icr = reg_in32(card, REG_INTR_CAUSE);
+
+		if (icr & ICR_RECEIVE)
+		{
+			uint32_t head = reg_in32(card, REG_RXDESC_HEAD);
+
+			while (card->rx_cur_buffer != head)
+			{
+				size_t size = card->rx_desc[card->rx_cur_buffer].length;
+				uint8_t status = card->rx_desc[card->rx_cur_buffer].status;
+
+				if ((status & 0x1) == 0)
+					break;
+
+				size -= 4;
+
+				card->rx_cur_buffer = (card->rx_cur_buffer + 1) % RX_BUFFER_NUM;
+			}
+
+			if (card->rx_cur_buffer == head)
+				reg_out32(card, REG_RXDESC_TAIL, (head + RX_BUFFER_NUM - 1) % RX_BUFFER_NUM);
+			else
+				reg_out32(card, REG_RXDESC_TAIL, card->rx_cur_buffer);
+		}
+	}
+}
+
 static void enableCard(struct e1000_card *card)
 {
 	// Deactivate card
@@ -228,6 +283,26 @@ static void enableCard(struct e1000_card *card)
 	card->netDevice = kmalloc(sizeof(net_device_t));
 	loadMACAddress(card, (uint16_t*)card->netDevice->hwaddr);
 
+	uint64_t mac;
+	loadMACAddress(card, (uint16_t*)&mac);
+	reg_out32(card, REG_RECV_ADDR_LIST, mac & 0xffffffff);
+	reg_out32(card, REG_RECV_ADDR_LIST + 4, (*(&mac + 2) & 0xFFFF) | RAH_VALID);
+
+	card->rx_buffer = kmalloc(RX_BUFFER_NUM * RX_BUFFER_SIZE);
+	card->tx_buffer = kmalloc(RX_BUFFER_NUM * RX_BUFFER_SIZE);
+
+	for (int i = 0; i < RX_BUFFER_NUM; ++i)
+	{
+		card->rx_desc[i].length = RX_BUFFER_SIZE;
+		card->rx_desc[i].buffer = (intptr_t)(card->rx_buffer + RX_BUFFER_SIZE * i);
+	}
+
+	card->tx_cur_buffer = 0;
+	card->rx_cur_buffer = 0;
+
+	reg_out32(card, REG_RX_CTL, RCTL_ENABLE | RCTL_BROADCAST | RCTL_2K_BUFSIZE);
+	reg_out32(card, REG_TX_CTL, TCTL_ENABLE | TCTL_PADDING | TCTL_COLL_TSH | TCTL_COLL_DIST);
+
 	strcpy(card->netDevice->name, "eth");
 	strcpy(card->netDevice->name + 3, itoa(net_ether_offset++, 10));
 	card->netDevice->mtu = 1500;
@@ -236,6 +311,10 @@ static void enableCard(struct e1000_card *card)
 	card->netDevice->data = card;
 
 	net_register_device(card->netDevice);
+
+	interrupts_registerHandler(card->pciDevice->interruptLine + IRQ0, handleInterrupt);
+	reg_out32(card, REG_INTR_MASK_CLR, 0xFFFF);
+	reg_out32(card, REG_INTR_MASK, 0xFFFF);
 }
 
 void e1000_init()
