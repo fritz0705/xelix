@@ -114,6 +114,14 @@ int vmem_iterate(struct vmem_context *ctx, vmem_iterator_t iterator)
 	return i;
 }
 
+int vmem_replace_page(struct vmem_context *ctx, struct vmem_page *pg)
+{
+	vmem_rm_page_virt(ctx, pg->virt_addr);
+	vmem_add_page(ctx, pg);
+
+	return 0;
+}
+
 int vmem_add_page(struct vmem_context *ctx, struct vmem_page *pg)
 {
 	struct vmem_context_node *node = kmalloc(sizeof(struct vmem_context_node));

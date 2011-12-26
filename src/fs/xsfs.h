@@ -20,12 +20,4 @@
 
 #include <lib/generic.h>
 
-// Making ponies fly.
-#define init(C, args...) \
-	{ \
-		log(LOG_INFO, "init: Starting to initialize " #C "\n"); \
-		C ## _init(args); \
-		log(LOG_INFO, "init: Initialized " #C "\n"); \
-	}
-
-bool init_haveGrub;
+void* xsfs_read(char* path);
