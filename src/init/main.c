@@ -67,6 +67,12 @@ static void compilerInfo()
 	log(LOG_INFO, "\tTarget Architecture: %s\n", ARCHNAME);
 }
 
+
+void send_success()
+{
+	serial_print("Boot complete.\n");
+}
+
 /* This is the very first function of our kernel and gets called
  * directly from the bootloader (GRUB etc.).
  */
@@ -103,7 +109,7 @@ void __attribute__((__cdecl__)) main(multiboot_info_t* mBoot)
 
 	// Networking
 	init(rtl8139);
-	#ifndef XELIX_WITHOUT_SLIP
+	#ifdef XELIX_WITH_SLIP
 		init(slip);
 	#endif
 
@@ -113,6 +119,10 @@ void __attribute__((__cdecl__)) main(multiboot_info_t* mBoot)
 	void* data = elf_load_file("/init");
 	if(data)
 		scheduler_add(scheduler_newUserTask(data, NULL, "/init"));
+
+	#ifndef XELIX_WITH_SLIP
+		scheduler_add(scheduler_newKernelTask(send_success, NULL, "send_success"));
+	#endif
 
 	/* Is intentionally last. It's also intentional that the init()
 	 * macro isn't used here. Seriously, don't mess around here.
