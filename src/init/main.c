@@ -36,9 +36,9 @@
 #include <memory/kmalloc.h>
 #include <hw/speaker.h>
 #include <fs/vfs.h>
+#include <fs/xsfs.h>
 #include <lib/argparser.h>
 #include <tasks/scheduler.h>
-#include <init/debugconsole.h>
 #include <console/interface.h>
 #include <hw/pci.h>
 #include <hw/rtl8139.h>
@@ -92,12 +92,14 @@ void __attribute__((__cdecl__)) main(multiboot_info_t* mBoot)
 	init(argparser, multiboot_info->cmdLine);
 	init(cpu);
 	init(acpi);	
-	init(vfs);
 	init(pci);
 	init(syscall);
 	init(vmem);
 	init(paging);
 	init(ata);
+
+	// TODO remove hardcoded stuff
+	vfs_mount("/", &xsfs_read);
 
 	// Networking
 	init(rtl8139);
@@ -106,10 +108,11 @@ void __attribute__((__cdecl__)) main(multiboot_info_t* mBoot)
 	#endif
 
 	if(multiboot_info->modsCount)
-		elf_load((void*)multiboot_info->modsAddr[0].start, "initrd");
+			scheduler_add(scheduler_newUserTask(elf_load((void*)multiboot_info->modsAddr[0].start), NULL, "initrd"));
 
-	if(multiboot_info->modsCount < 1)
-		scheduler_add(scheduler_newKernelTask(debugconsole_init, NULL, "debugconsole"));
+	void* data = elf_load_file("/init");
+	if(data)
+		scheduler_add(scheduler_newUserTask(data, NULL, "/init"));
 
 	/* Is intentionally last. It's also intentional that the init()
 	 * macro isn't used here. Seriously, don't mess around here.

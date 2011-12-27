@@ -1,6 +1,6 @@
 #pragma once
 
-/* Copyright © 2010, 2011 Lukas Martini
+/* Copyright © 2011 Lukas Martini
  *
  * This file is part of Xelix.
  *
@@ -15,22 +15,9 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with Xelix.  If not, see <http://www.gnu.org/licenses/>.
+ * along with Xelix. If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include <lib/generic.h>
+#include <tasks/syscall.h>
 
-typedef struct {
-   uint64_t num;
-   char path[512];
-   char mount_path[512];
-   uint32_t offset;
-   uint32_t mountpoint;
-} vfs_file_t;
-
-typedef void* (*vfs_read_callback_t)(char* path, uint32_t offset);
-
-vfs_file_t* vfs_get_from_id(uint32_t id);
-void* vfs_read(vfs_file_t* fp);
-vfs_file_t* vfs_open(char* path);
-int vfs_mount(char* path, vfs_read_callback_t read_callback);
+int sys_open(struct syscall syscall);

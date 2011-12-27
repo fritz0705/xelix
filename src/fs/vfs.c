@@ -1,5 +1,5 @@
-/* vfs.c: Provices abstraction from the filesystem drivers
- * Copyright © 2010, 2011 Lukas Martini
+/* vfs.c: Virtual file system
+ * Copyright © 2011 Lukas Martini
  *
  * This file is part of Xelix.
  *
@@ -17,46 +17,66 @@
  * along with Xelix.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+// TODO: See doc/vfs.txt
+
 #include "vfs.h"
 
 #include <lib/log.h>
 #include <memory/kmalloc.h>
 #include <lib/string.h>
+#include <lib/list.h>
+#include <lib/spinlock.h>
+#include <fs/xsfs.h>
 
-vfs_node_t* vfs_create_node(char name[128], uint32_t mask, uint32_t uid, uint32_t gid, uint32_t flags, uint32_t inode, uint32_t length, uint32_t impl, read_type_t read, write_type_t write, open_type_t open, close_type_t close, readdir_type_t readdir, finddir_type_t finddir, vfs_node_t* ptr, vfs_node_t* parent)
+#define MAX_MOUNTPOINTS 50
+#define MAX_OPENFILES 500
+
+struct mountpoint
 {
-	vfs_node_t* node = (vfs_node_t*)kmalloc(sizeof(vfs_node_t));
-	strcpy(node->name, name);
-	
-	if(parent == NULL)
-			parent = node; // This node is it's own parent
+	char path[265];
+	bool active;
+	vfs_read_callback_t read_callback;
+};
 
-	log(LOG_INFO, "vfs: Creating new node %s (flags 0x%x, parent %s).\n", name, flags, parent->name);
-	
-	node->mask = mask;
-	node->uid = uid;
-	node->gid = gid;
-	node->flags = flags;
-	node->inode = inode;
-	node->length = length;
-	node->impl = impl;
-	node->read = read;
-	node->write = write;
-	node->open = open;
-	node->close = close;
-	node->readdir = readdir;
-	node->finddir = finddir;
-	node->ptr = ptr;
-	node->parent = parent;
+struct mountpoint mountpoints[MAX_MOUNTPOINTS];
+vfs_file_t files[MAX_OPENFILES];
+uint32_t last_mountpoint = -1;
+uint32_t last_file = -1;
 
-	return node;
+vfs_file_t* vfs_get_from_id(uint32_t id)
+{
+	return &files[id];
 }
 
-// Initialize the filesystem abstraction system
-void vfs_init()
+void* vfs_read(vfs_file_t* fp)
 {
-	// Initialise the root directory.
-	vfs_rootnodecount = 0;
-	vfs_rootnode = vfs_create_node("root", 0, 0, 0, FS_DIRECTORY, 0, 0, 0, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL); // RootNode is it's own parent, therefore NULL as last parameter.
+	struct mountpoint mp = mountpoints[fp->mountpoint];
+	return mp.read_callback (fp->mount_path, fp->offset);
+	return NULL;
 }
 
+vfs_file_t* vfs_open(char* path)
+{
+	uint32_t num;
+	spinlock_cmd(num = ++last_file, 20, (vfs_file_t*)-1);
+
+	files[num].num = num;
+	strcpy(files[num].path, path);
+	strcpy(files[num].mount_path, path); // Fixme
+	files[num].offset = 0;
+	files[num].mountpoint = 0; // Fixme
+	return &files[num];
+}
+
+int vfs_mount(char* path, vfs_read_callback_t read_callback)
+{
+	uint32_t num;
+	spinlock_cmd(num = ++last_mountpoint, 20, -1);
+
+	strcpy(mountpoints[num].path, path);
+	mountpoints[num].active = true;
+	mountpoints[num].read_callback = read_callback;
+
+	log(LOG_DEBUG, "Mounted [%x] to %s\n", read_callback, path);
+	return 0;
+}

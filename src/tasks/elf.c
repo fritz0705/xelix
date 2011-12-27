@@ -23,12 +23,13 @@
 #include <lib/log.h>
 #include <lib/print.h>
 #include <tasks/scheduler.h>
+#include <fs/vfs.h>
 
-#define fail(args...) do { log(LOG_INFO, args); return 1; } while(false);
+#define fail(args...) do { log(LOG_INFO, args); return NULL; } while(false);
 
 char header[4] = {0x7f, 'E', 'L', 'F'};
 
-int elf_load(elf_t* bin, char name[SCHEDULER_MAXNAME])
+void* elf_load(elf_t* bin)
 {
 	if(bin->ident.magic[0] != header[0]
 	|| bin->ident.magic[1] != header[1]
@@ -63,6 +64,15 @@ int elf_load(elf_t* bin, char name[SCHEDULER_MAXNAME])
 		memcpy(phead->virtaddr, (void*)bin + phead->offset, phead->filesize);	
 	}
 
-	scheduler_add(scheduler_newUserTask(bin->entry, NULL, name));
-	return 0;
+	return bin->entry;
+}
+
+void* elf_load_file(char* path)
+{
+	vfs_file_t* fd = vfs_open(path);
+	void* data = vfs_read(fd);
+	if(data == NULL)
+		return NULL;
+	
+	return elf_load(data);
 }

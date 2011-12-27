@@ -44,4 +44,4 @@ static inline void print(const char* string)
 {
         fputs(string, stdout);
 }
-
+FILE* fopen(const char* path, const char* mode);

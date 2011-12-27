@@ -1,5 +1,3 @@
-#pragma once
-
 /* Copyright © 2011 Lukas Martini
  *
  * This file is part of Xlibc.
@@ -18,23 +16,28 @@
  * License along with Xlibc. If not, see <http://www.gnu.org/licenses/>.
  */
 
-// stdlib.h is supposed to include all the stddef.h stuff
+#include <stdio.h>
 #include <stddef.h>
+#include <stdlib.h>
+#include <string.h>
 
-// Return values
-#define EXIT_FAILURE -1
-#define EXIT_SUCCESS  0
+FILE* fopen(const char* path, const char* mode)
+{
+	uint32_t num;
+	asm __volatile__(
+		"mov eax, 13;"
+		"mov ebx, %1;"
+		"mov ecx, %2;"
+		"int 0x80;"
+		"mov %0, eax;"
+	: "=r" (num) : "r" (path), "r" (mode) : "eax", "ebx", "ecx");
+	
+	if(num == -1)
+		return NULL;
 
-// Should be an own function as of POSIX
-#define _Exit _exit
-
-// Disregards atexit()
-void _exit(int status);
-// Cares about atexit()
-void exit(int status);
-void* malloc(size_t size);
-/* Memory leaks ahoy! No, seriously, before we can add free(), we need
- * proper in-application memory management.
- */
-#define free(ptr) ()
-int execv(char const *path, char const * const * argv);
+	FILE* fd = malloc(sizeof(FILE));
+	fd->num = num;
+	strcpy(fd->filename, path);
+	fd->offset = 0;
+	return fd;
+}

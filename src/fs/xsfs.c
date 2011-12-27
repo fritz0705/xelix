@@ -46,7 +46,7 @@ struct file {
 } __attribute__((packed));
 
 // This is so unbelievably ineffective and dumb, i'm really sorry. --Lukas
-void* xsfs_read(char* path)
+void* xsfs_read(char* path, uint32_t offset)
 {
 	uint16_t* buffer = (uint16_t*)kmalloc(sizeof(uint16_t) * BUFSIZE);
 	ata_read(ATA0, 0, BUFSIZE - 1, buffer);
@@ -77,12 +77,19 @@ void* xsfs_read(char* path)
 		return NULL;
 	}
 
+	// Strip of leading / of path
+	if(*path == '/')
+		path++;
+
 	struct file* current_file;
 	for(int i = 0; i < header->num_files; i++)
 	{
 		current_file = (struct file*)((uint32_t)buffer + (uint32_t)header->fileoffset + (i * sizeof(struct file)));
 		if(!strcmp(current_file->name, path))
+		{
+			*(char*)((uint32_t)buffer + current_file->offset + current_file->size) = EOF;
 			return (void*)((uint32_t)buffer + current_file->offset);
+		}
 	}
 
 	return NULL;
