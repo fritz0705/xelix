@@ -181,6 +181,7 @@ task_t *scheduler_newTask(task_t *parent, char name[SCHEDULER_MAXNAME])
  */
 task_t *scheduler_newKernelTask(void *entry, task_t *parent, char name[SCHEDULER_MAXNAME])
 {
+	if(entry == NULL) return NULL;
 	task_t *thisTask = scheduler_newTask(parent, name);
 
 	void *stack = kmalloc_a(STACKSIZE);
@@ -208,6 +209,7 @@ task_t *scheduler_newKernelTask(void *entry, task_t *parent, char name[SCHEDULER
 
 task_t *scheduler_newUserTask(void *entry, task_t *parent, char name[SCHEDULER_MAXNAME])
 {
+	if(entry == NULL) return NULL;
 	task_t *thisTask = scheduler_newTask(parent, name);
 
 	void *stack = kmalloc_a(STACKSIZE);
