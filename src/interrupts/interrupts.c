@@ -47,7 +47,7 @@ cpu_state_t* interrupts_callback(cpu_state_t* regs)
 		if((int)nowTask != NULL && (int)nowTask->state != NULL)
 		{
 			paging_apply(nowTask->memory_context);
-			return nowTask->virt_state;
+			return nowTask->state;
 		}
 	}
 

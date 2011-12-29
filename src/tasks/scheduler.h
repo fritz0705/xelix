@@ -21,7 +21,6 @@
 #include <lib/generic.h>
 #include <hw/cpu.h>
 #include <memory/vmem.h>
-#include "syscall.h"
 
 #define SCHEDULER_MAXNAME 256
 
@@ -35,12 +34,6 @@ typedef struct task {
 	struct task* last;
 
 	struct vmem_context *memory_context;
-
-	enum {
-		TASK_TYPE_KERNEL,
-		TASK_TYPE_USER,
-		TASK_TYPE_SYSCALL
-	} type;
 
 	// Current task state
 	enum {
@@ -56,20 +49,11 @@ typedef struct task {
 		TASK_SYSCONV_LINUX,
 		TASK_SYSCONV_UNIX
 	} sys_call_conv;
-	
-	struct syscall syscall;
-	/* Virtual address of the state */
-	cpu_state_t* virt_state;
 } task_t;
 
 int scheduler_state;
 
-// Create type-independent task
-task_t *scheduler_newTask(task_t *parent, char name[SCHEDULER_MAXNAME]);
-task_t *scheduler_newKernelTask(void *entry, task_t *parent, char name[SCHEDULER_MAXNAME]);
-task_t *scheduler_newSyscallTask(void *entry, task_t *parent, char name[SCHEDULER_MAXNAME]);
-task_t *scheduler_newUserTask(void *entry, task_t *parent, char name[SCHEDULER_MAXNAME]);
-
+task_t *scheduler_newTask(void *entry, task_t *parent, char name[SCHEDULER_MAXNAME]);
 void scheduler_add(task_t *task);
 void scheduler_terminateCurrentTask();
 task_t* scheduler_getCurrentTask();

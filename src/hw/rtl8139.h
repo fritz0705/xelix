@@ -19,5 +19,6 @@
  */
 
 #include <lib/generic.h>
+#include <hw/pci.h>
 
 void rtl8139_init();

@@ -19,18 +19,16 @@
 
 #include "munmap.h"
 #include <memory/vmem.h>
-#include <tasks/scheduler.h>
 #include <memory/paging.h>
 
 int sys_munmap(struct syscall syscall)
 {
-	struct vmem_context *ctx = scheduler_getCurrentTask()->parent->memory_context;
 	void *addr = (void*)syscall.params[0];
 	size_t length = syscall.params[1];
 
 	int pages = length / 4096;
 	for (int i = 0; i < pages; ++i)
-		vmem_rm_page_virt(ctx, (void*)addr + i * 4096);
+		vmem_rm_page_virt(vmem_currentContext, (void*)addr + i * 4096);
 
 	return 0;
 }

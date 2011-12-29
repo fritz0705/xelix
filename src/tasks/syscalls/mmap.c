@@ -20,12 +20,10 @@
 #include <memory/vmem.h>
 #include <memory/paging.h>
 #include <memory/kmalloc.h>
-#include <tasks/scheduler.h>
 #include "mmap.h"
 
 int sys_mmap(struct syscall syscall)
 {
-	struct vmem_context *ctx = scheduler_getCurrentTask()->parent->memory_context;
 	void *addr = (void *)syscall.params[0];
 	size_t length = syscall.params[1];
 	int readonly = syscall.params[2];
@@ -44,7 +42,7 @@ int sys_mmap(struct syscall syscall)
 		uint32_t tmpLength = length;
 		while (1)
 		{
-			struct vmem_page* currPage = vmem_get_page_virt(ctx, (void *)counter);
+			struct vmem_page *currPage = vmem_get_page_virt(vmem_currentContext, (void *)counter);
 
 			if (currPage == NULL && length == 0)
 			{
@@ -69,7 +67,7 @@ int sys_mmap(struct syscall syscall)
 		newPage->allocated = 0;
 		newPage->virt_addr = addr + i * 4096;
 
-		vmem_add_page(ctx, newPage);
+		vmem_add_page(vmem_currentContext, newPage);
 	}
 
 	return (int) addr;

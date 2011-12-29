@@ -21,8 +21,6 @@
 #include "net.h"
 #include "ip4.h"
 
-int net_ether_offset = 0;
-
 void *net_ether_getPayload(uint8_t *data)
 {
 	return data + sizeof(ether_frame_hdr_t);

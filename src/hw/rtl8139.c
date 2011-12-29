@@ -19,15 +19,12 @@
  */
 
 #include <hw/rtl8139.h>
-#include <hw/pci.h>
-
 #include <lib/log.h>
 #include <lib/portio.h>
 #include <interrupts/interface.h>
 #include <memory/kmalloc.h>
 #include <net/ether.h>
 #include <net/net.h>
-#include <lib/string.h>
 
 #define VENDOR_ID 0x10ec
 #define DEVICE_ID 0x8139
@@ -264,9 +261,6 @@ static void enableCard(struct rtl8139_card *card)
 	log(LOG_DEBUG, "rtl8139: Enabled receiver / transmitter.\n");
 
 	card->netDevice = kmalloc(sizeof(net_device_t));
-	strcpy(card->netDevice->name, "eth");
-	strcpy(card->netDevice->name + 3, itoa(net_ether_offset++, 10));
-	memcpy(card->netDevice->hwaddr, card->macAddr, 6);
 	card->netDevice->mtu = 1500;
 	card->netDevice->proto = NET_PROTO_ETH;
 	card->netDevice->send = sendCallback;

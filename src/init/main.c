@@ -114,14 +114,14 @@ void __attribute__((__cdecl__)) main(multiboot_info_t* mBoot)
 	#endif
 
 	if(multiboot_info->modsCount)
-			scheduler_add(scheduler_newKernelTask(elf_load((void*)multiboot_info->modsAddr[0].start), NULL, "initrd"));
+			scheduler_add(scheduler_newTask(elf_load((void*)multiboot_info->modsAddr[0].start), NULL, "initrd"));
 
 	void* data = elf_load_file("/init");
 	if(data)
-		scheduler_add(scheduler_newKernelTask(data, NULL, "/init"));
+		scheduler_add(scheduler_newTask(data, NULL, "/init"));
 
 	#ifndef XELIX_WITH_SLIP
-		scheduler_add(scheduler_newKernelTask(send_success, NULL, "send_success"));
+		scheduler_add(scheduler_newTask(send_success, NULL, "send_success"));
 	#endif
 
 	/* Is intentionally last. It's also intentional that the init()

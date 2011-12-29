@@ -27,8 +27,6 @@ typedef enum {
 
 typedef struct net_device {
 	char name[15];
-	/* MAC address for ethernet devices */
-	char hwaddr[6];
 	uint16_t mtu;
 	net_l2proto_t proto;
 

@@ -22,9 +22,6 @@
 
 int sys_getppid(struct syscall syscall)
 {
-	if (scheduler_getCurrentTask()->parent->parent != NULL)
-		return scheduler_getCurrentTask()->parent->parent->pid;
-
-	return 0;
+	return scheduler_getCurrentTask()->parent->pid;
 }
 
