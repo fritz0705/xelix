@@ -3,7 +3,7 @@
  *
  * This file is part of Xelix.
  *
- * Xelix is free software: you can redistribute it and/or modify
+ * Xelix is kfree software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
@@ -22,92 +22,146 @@
 
 struct list
 {
-	int length;
-	struct list_node *first_node;
-	struct list_node *last_node;
+	list_node_t stub;
 };
 
 struct list_node
 {
-	struct list *list;
-	struct list_node *next;
-	struct list_node *prev;
+	list_node_t next;
+	list_node_t prev;
+	list_node_t lstub;
+	bool stub:1;
 	void *data;
 };
 
-struct list *list_new()
+list_t list_create()
 {
-	struct list *list = kmalloc(sizeof(struct list));
-	list->length = 0;
-	list->first_node = NULL;
-	list->last_node = NULL;
-
-	return list;
-}
-
-struct list *list_alloc(void * (*allocator)(int len))
-{
-	return allocator(sizeof(struct list));
-}
-
-void *list_append(struct list *l, void *data)
-{
-	struct list_node *node = kmalloc(sizeof(struct list_node));
-
-	node->data = data;
-	node->list = l;
-
-	if (l->first_node == NULL)
-	{
-		l->first_node = node;
-		l->last_node = node;
-
-		return data;
-	}
-
-	node->prev = l->last_node;
-	l->last_node->next = node;
-	l->last_node = node;
-
-	return data;
-}
-
-void *list_prepend(struct list *l, void *data)
-{
-	struct list_node *node = kmalloc(sizeof(struct list_node));
-
-	node->data = data;
-	node->list = l;
-
-	if (l->last_node == NULL)
-	{
-		l->first_node = node;
-		l->last_node = node;
-
-		return data;
-	}
-
-	node->next = l->first_node;
-	l->first_node->prev = node;
-	l->first_node = node;
-
-	return data;
-}
-
-void *list_get(struct list *l, int offset)
-{
-	struct list_node *node = l->first_node;
-	int i = 0;
-
-	while (node != NULL && i < offset)
-	{
-		node = node->next;
-		i++;
-	}
-
-	if (node == NULL)
+	list_t l = kmalloc(sizeof *l);
+	if (!l)
 		return NULL;
 
-	return node->data;
+	l->stub = kmalloc(sizeof *l->stub);
+
+	if (!l->stub)
+	{
+		kfree(l);
+		return NULL;
+	}
+
+	*l->stub = (struct list_node){
+		.next = l->stub,
+		.prev = l->stub,
+		.lstub = l->stub,
+		.stub = true,
+		.data = l
+	};
+
+	return l;
 }
 
+list_node_t list_head(list_t l)
+{
+	return l->stub;
+}
+
+list_node_t list_tail(list_t l)
+{
+	return l->stub;
+}
+
+list_node_t list_next(list_node_t l)
+{
+	return l->next;
+}
+
+list_node_t list_prev(list_node_t l)
+{
+	return l->prev;
+}
+
+list_node_t list_insert_after(list_node_t n, void *data)
+{
+	/* Allocate new list node */
+	list_node_t new_n = kmalloc(sizeof *new_n);
+	/* Fill new list node with parameters */
+	*new_n = (struct list_node){
+		.next = n->next,
+		.prev = n,
+		.lstub = n->lstub,
+		.stub = false,
+		.data = data
+	};
+
+	n->next->prev = new_n;
+	n->next = new_n;
+
+	return new_n;
+}
+
+list_node_t list_insert_before(list_node_t n, void *data)
+{
+	/* Allocate new list node */
+	list_node_t new_n = kmalloc(sizeof *new_n);
+	/* Fill new list node with parameters */
+	*new_n = (struct list_node){
+		.next = n,
+		.prev = n->prev,
+		.lstub = n->lstub,
+		.stub = false,
+		.data = data
+	};
+
+	n->prev->next = new_n;
+	n->prev = new_n;
+
+	return new_n;
+}
+
+list_node_t list_replace(list_node_t n, void *data)
+{
+	n->data = data;
+	return n;
+}
+
+void *list_data(list_node_t n)
+{
+	return n->data;
+}
+
+bool list_remove(list_node_t n)
+{
+	if (n->stub)
+		return false;
+
+	n->next->prev = n->prev;
+	n->prev->next = n->next;
+
+	kfree(n);
+
+	return true;
+}
+
+bool list_is_stub(list_node_t n)
+{
+	return n->stub;
+}
+
+void list_destroy(list_t l)
+{
+	(void)l;
+}
+
+list_t list_get_list(list_node_t n)
+{
+	return n->lstub->data;
+}
+
+list_node_t list_append(list_t l, void *data)
+{
+	return list_insert_before(l->stub, data);
+}
+
+list_node_t list_prepend(list_t l, void *data)
+{
+	return list_insert_after(l->stub, data);
+}
